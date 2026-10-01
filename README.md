@@ -38,7 +38,7 @@ Open http://localhost:5173 — Vite proxies `/api` and `/ws` to the FastAPI serv
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| WS | `/ws/formcheck/{exercise_type}` | Stream Base64 JPEG frames; receive reps + form issues |
+| WS | `/ws/motion_tracker/{exercise_type}` | Stream Base64 JPEG frames; receive reps + form issues |
 | POST | `/api/coach-summary` | `{ chat_history }` → GPT-4o-mini post-set summary |
 
 Supported `exercise_type` values: `squat`, `lat_pulldown`.
