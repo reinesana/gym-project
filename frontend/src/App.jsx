@@ -105,7 +105,10 @@ function drawPose(ctx, landmarks, width, height, hotEdges, mirrored = true) {
     const [x2, y2] = point(lb);
     const hot = hotEdges.has(edgeKey(a, b));
     ctx.lineWidth = hot ? 5 : 3;
-    ctx.strokeStyle = hot ? "#ff3b30" : "rgba(255,255,255,0.92)";
+    // Classic CV look: neon green skeleton, red only on form breaks
+    ctx.strokeStyle = hot ? "#ff2d2d" : "#39ff14";
+    ctx.shadowColor = hot ? "rgba(255,45,45,0.55)" : "rgba(57,255,20,0.55)";
+    ctx.shadowBlur = 8;
     ctx.beginPath();
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
@@ -118,7 +121,15 @@ function drawPose(ctx, landmarks, width, height, hotEdges, mirrored = true) {
     const hot = hotJoints.has(index);
     ctx.beginPath();
     ctx.arc(x, y, hot ? 6 : 4.5, 0, Math.PI * 2);
-    ctx.fillStyle = hot ? "#ff3b30" : "#ffffff";
+    ctx.fillStyle = hot ? "#ff2d2d" : "#39ff14";
+    ctx.shadowColor = hot ? "rgba(255,45,45,0.7)" : "rgba(57,255,20,0.7)";
+    ctx.shadowBlur = 10;
+    ctx.fill();
+    // crisp joint center
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.arc(x, y, hot ? 2.5 : 2, 0, Math.PI * 2);
+    ctx.fillStyle = "#041a08";
     ctx.fill();
   });
 }
