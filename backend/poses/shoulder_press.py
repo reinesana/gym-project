@@ -60,14 +60,15 @@ def analyze_shoulder_press(
     right_height = right_shoulder[1] - right_wrist[1]
     press_height = (left_height + right_height) / 2.0
 
-    if phase == "racked" and (elbow_angle > 100 or press_height > 0.08):
+    # Start only when wrists rise above the shoulders (not just arms hanging)
+    if phase == "racked" and press_height > 0.06:
         phase = "pressing"
         set_started = True
     elif phase == "pressing" and elbow_angle > 150 and press_height > 0.14:
         phase = "lockout"
-    elif phase == "lockout" and elbow_angle < 130:
+    elif phase == "lockout" and press_height < 0.1:
         phase = "lowering"
-    elif phase == "lowering" and elbow_angle < 100 and press_height < 0.08:
+    elif phase == "lowering" and press_height < 0.04:
         phase = "racked"
         reps += 1
 
