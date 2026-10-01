@@ -28,16 +28,17 @@ You’ll also need a webcam and two terminal windows.
 ## 1. Download the project
 
 ```bash
-git clone https://github.com/reinesana/stormhacks-gym-project.git
-cd stormhacks-gym-project
+git clone https://github.com/reinesana/gym-project.git
+cd gym-project
 git checkout main
 git pull origin main
 ```
 
-If you already cloned it:
+If you already cloned it (folder may still be named `stormhacks-gym-project`):
 
 ```bash
-cd stormhacks-gym-project
+cd gym-project
+# or: cd stormhacks-gym-project
 git checkout main
 git pull origin main
 ```
