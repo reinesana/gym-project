@@ -37,12 +37,14 @@ async def handle_motion_tracker(websocket: WebSocket, exercise_type: str):
 
             image = cv2.imdecode(np.frombuffer(base64.b64decode(raw), np.uint8), cv2.IMREAD_COLOR)
             if image is None:
-                await websocket.send_json({"reps": state.get("reps", 0), "issues": []})
+                await websocket.send_json({"reps": state.get("reps", 0), "issues": [], "landmarks": []})
                 continue
 
             results = pose.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
             if not results.pose_landmarks:
-                await websocket.send_json({"reps": state.get("reps", 0), "issues": [], "pose_detected": False})
+                await websocket.send_json(
+                    {"reps": state.get("reps", 0), "issues": [], "pose_detected": False, "landmarks": []}
+                )
                 continue
 
             landmarks = [
@@ -50,7 +52,15 @@ async def handle_motion_tracker(websocket: WebSocket, exercise_type: str):
                 for lm in results.pose_landmarks.landmark
             ]
             state, reps, issues = analyze(landmarks, state)
-            await websocket.send_json({"reps": reps, "phase": state.get("phase"), "issues": issues, "pose_detected": True})
+            await websocket.send_json(
+                {
+                    "reps": reps,
+                    "phase": state.get("phase"),
+                    "issues": issues,
+                    "pose_detected": True,
+                    "landmarks": landmarks,
+                }
+            )
     except WebSocketDisconnect:
         pass
     finally:
