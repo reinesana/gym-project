@@ -1,47 +1,5 @@
-:root {
-  --bg-deep: #0c1210;
-  --bg-mid: #14201a;
-  --bg-panel: rgba(20, 36, 28, 0.72);
-  --ink: #e8f2eb;
-  --muted: #9bb5a4;
-  --accent: #3dffa8;
-  --accent-dim: #1a8f5c;
-  --warn: #ffb454;
-  --line: rgba(232, 242, 235, 0.12);
-  --font-display: "Bebas Neue", sans-serif;
-  --font-body: "DM Sans", sans-serif;
-  color: var(--ink);
-  background:
-    radial-gradient(1200px 600px at 10% -10%, #1a3d2e 0%, transparent 55%),
-    radial-gradient(900px 500px at 100% 0%, #243018 0%, transparent 50%),
-    linear-gradient(165deg, var(--bg-deep), var(--bg-mid) 45%, #0a100e);
-  font-family: var(--font-body);
-  line-height: 1.45;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-}
-
-* {
-  box-sizing: border-box;
-}
-
 html,
-body,
-#root {
-  margin: 0;
-  min-height: 100%;
-}
-
 body {
-  min-height: 100vh;
-}
-
-button,
-select {
-  font: inherit;
-}
-
-button {
-  cursor: pointer;
+  margin: 0;
+  background: #000;
 }
