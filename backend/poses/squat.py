@@ -2,61 +2,38 @@
 
 from __future__ import annotations
 
-import math
 from typing import Any
 
+from poses.helpers import angle, lm, visible_enough
 
-# MediaPipe landmark indices
+
 left_shoulder_i, right_shoulder_i = 11, 12
 left_hip_i, right_hip_i = 23, 24
 left_knee_i, right_knee_i = 25, 26
 left_ankle_i, right_ankle_i = 27, 28
 
-
-def lm(landmarks: list, index: int) -> tuple[float, float, float]:
-    point = landmarks[index]
-    if isinstance(point, dict):
-        return float(point["x"]), float(point["y"]), float(point.get("visibility", 1.0))
-    return float(point.x), float(point.y), float(getattr(point, "visibility", 1.0))
+# Only coach after the athlete has been moving for a bit
+min_active_frames = 10
+issue_cooldown_frames = 45
 
 
-def angle(a: tuple[float, float, float], b: tuple[float, float, float], c: tuple[float, float, float]) -> float:
-    """Return the angle ABC in degrees."""
-    bax, bay = a[0] - b[0], a[1] - b[1]
-    bcx, bcy = c[0] - b[0], c[1] - b[1]
-    dot = bax * bcx + bay * bcy
-    mag_a = math.hypot(bax, bay)
-    mag_c = math.hypot(bcx, bcy)
-    if mag_a * mag_c == 0:
-        return 180.0
-    cos_angle = max(-1.0, min(1.0, dot / (mag_a * mag_c)))
-    return math.degrees(math.acos(cos_angle))
-
-
-def knee_valgus(hip: tuple[float, float, float], knee: tuple[float, float, float], ankle: tuple[float, float, float], side: str) -> bool:
-    """Detect knees caving inward relative to hip–ankle line."""
+def knee_valgus(hip, knee, ankle, side: str) -> bool:
     midline = (hip[0] + ankle[0]) / 2.0
     if side == "left":
-        return knee[0] > midline + 0.03
-    return knee[0] < midline - 0.03
+        return knee[0] > midline + 0.055
+    return knee[0] < midline - 0.055
 
 
 def analyze_squat(landmarks: list, state: dict[str, Any] | None = None) -> tuple[dict[str, Any], int, list[dict[str, str]]]:
-    """
-    Analyze one frame of squat pose.
-
-    Returns:
-        new_state: updated tracking state
-        rep_count: total completed reps
-        issues: list of {type, spoken_text} for form breaks
-    """
     if state is None:
         state = {}
 
-    phase = state.get("phase", "standing")  # standing | descending | bottom | ascending
+    phase = state.get("phase", "standing")
     reps = int(state.get("reps", 0))
     cooldown = dict(state.get("issue_cooldown", {}))
     frame = int(state.get("frame", 0)) + 1
+    active_frames = int(state.get("active_frames", 0))
+    set_started = bool(state.get("set_started", False))
 
     left_shoulder = lm(landmarks, left_shoulder_i)
     right_shoulder = lm(landmarks, right_shoulder_i)
@@ -67,6 +44,18 @@ def analyze_squat(landmarks: list, state: dict[str, Any] | None = None) -> tuple
     left_ankle = lm(landmarks, left_ankle_i)
     right_ankle = lm(landmarks, right_ankle_i)
 
+    key_points = [left_hip, right_hip, left_knee, right_knee, left_ankle, right_ankle]
+    if not visible_enough(key_points, 0.65):
+        return {
+            "phase": phase,
+            "reps": reps,
+            "issue_cooldown": cooldown,
+            "frame": frame,
+            "active_frames": 0,
+            "set_started": set_started,
+            "pose_ok": False,
+        }, reps, []
+
     left_knee_angle = angle(left_hip, left_knee, left_ankle)
     right_knee_angle = angle(right_hip, right_knee, right_ankle)
     knee_angle = (left_knee_angle + right_knee_angle) / 2.0
@@ -75,50 +64,61 @@ def analyze_squat(landmarks: list, state: dict[str, Any] | None = None) -> tuple
     torso_right = angle(right_shoulder, right_hip, right_knee)
     torso_angle = (torso_left + torso_right) / 2.0
 
-    issues: list[dict[str, str]] = []
-
-    def emit(issue_type: str, spoken_text: str, every_n_frames: int = 30) -> None:
-        last = cooldown.get(issue_type, -10_000)
-        if frame - last >= every_n_frames:
-            issues.append({"type": issue_type, "spoken_text": spoken_text})
-            cooldown[issue_type] = frame
-
-    # Rep state machine based on average knee flexion
-    if phase == "standing" and knee_angle < 140:
+    # Stricter phase machine so setup/standing around doesn't look like a rep
+    if phase == "standing" and knee_angle < 125:
         phase = "descending"
-    elif phase == "descending" and knee_angle < 100:
+        set_started = True
+    elif phase == "descending" and knee_angle < 95:
         phase = "bottom"
-    elif phase == "bottom" and knee_angle > 120:
+    elif phase == "bottom" and knee_angle > 115:
         phase = "ascending"
-    elif phase == "ascending" and knee_angle > 155:
+    elif phase == "ascending" and knee_angle > 160:
         phase = "standing"
         reps += 1
 
-    # Form checks while under load (not fully standing)
     if phase in {"descending", "bottom", "ascending"}:
+        active_frames += 1
+    else:
+        active_frames = 0
+
+    issues: list[dict[str, str]] = []
+
+    def emit(issue_type: str, detail: str) -> None:
+        last = cooldown.get(issue_type, -10_000)
+        if frame - last < issue_cooldown_frames:
+            return
+        issues.append({"type": issue_type, "detail": detail})
+        cooldown[issue_type] = frame
+
+    # No coaching until the set is clearly underway
+    can_coach = set_started and active_frames >= min_active_frames
+
+    if can_coach and phase in {"descending", "bottom", "ascending"}:
         if knee_valgus(left_hip, left_knee, left_ankle, "left") or knee_valgus(
             right_hip, right_knee, right_ankle, "right"
         ):
-            emit("knee_cave", "Push your knees out")
+            emit("knee_cave", f"knees caving in at about {knee_angle:.0f} degrees of bend")
 
-        if torso_angle < 55:
-            emit("forward_lean", "Keep your chest up")
+        if phase in {"descending", "bottom"} and torso_angle < 48:
+            emit("forward_lean", f"chest dropping forward, torso angle about {torso_angle:.0f}")
 
-        if phase == "bottom" and knee_angle > 105:
-            emit("shallow_depth", "Go a little deeper")
+        if phase == "bottom" and knee_angle > 108:
+            emit("shallow_depth", f"squat depth only to about {knee_angle:.0f} degrees")
 
         hip_y = (left_hip[1] + right_hip[1]) / 2.0
         knee_y = (left_knee[1] + right_knee[1]) / 2.0
-        if phase == "bottom" and hip_y < knee_y - 0.08:
-            # Hips too high relative to knees in image space (y grows downward)
-            emit("hips_high", "Sit your hips lower")
+        if phase == "bottom" and hip_y < knee_y - 0.1:
+            emit("hips_high", "hips staying high at the bottom of the squat")
 
     new_state = {
         "phase": phase,
         "reps": reps,
         "issue_cooldown": cooldown,
         "frame": frame,
+        "active_frames": active_frames,
+        "set_started": set_started,
         "knee_angle": knee_angle,
         "torso_angle": torso_angle,
+        "pose_ok": True,
     }
     return new_state, reps, issues

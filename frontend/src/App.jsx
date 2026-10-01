@@ -6,7 +6,8 @@ const EXERCISES = [
   { value: "lat_pulldown", label: "Lat Pulldown", tip: "Film from the front" },
 ];
 
-const SPEAK_DEBOUNCE_MS = 4000;
+const SPEAK_DEBOUNCE_MS = 5000;
+const APP_NAME = "Gym Nerd 3000";
 const FRAME_INTERVAL_MS = 150;
 const TARGET_REPS = 10;
 
@@ -135,6 +136,9 @@ export default function App() {
   const workoutStartedRef = useRef(false);
   const phaseRef = useRef("—");
   const streamRef = useRef(null);
+  const recentCuesRef = useRef([]);
+  const liveCueInFlightRef = useRef(false);
+  const exerciseRef = useRef(exercise);
 
   const [page, setPage] = useState("start"); // start | app
   const [tab, setTab] = useState("summary");
@@ -158,6 +162,10 @@ export default function App() {
   const ringPct = Math.min(100, (totalReps / 30) * 100);
   const setProgress = Math.min(100, (reps / TARGET_REPS) * 100);
   const formMeter = Math.max(12, 100 - issueCount * 8);
+
+  useEffect(() => {
+    exerciseRef.current = exercise;
+  }, [exercise]);
 
   useEffect(() => {
     return () => {
@@ -268,6 +276,36 @@ export default function App() {
     );
   }
 
+  async function requestLiveCue(issue, phaseName, repsNow) {
+    if (liveCueInFlightRef.current) return;
+    liveCueInFlightRef.current = true;
+    try {
+      const res = await fetch("/api/live-cue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          exercise: exerciseLabel(exerciseRef.current),
+          issue_type: issue.type,
+          detail: issue.detail || issue.type,
+          phase: phaseName,
+          reps: repsNow,
+          recent_cues: recentCuesRef.current.slice(-6),
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = await res.json();
+      const cue = (body.cue || "").trim();
+      if (!cue) return;
+      recentCuesRef.current = [...recentCuesRef.current, cue].slice(-8);
+      setLiveCue(cue);
+      speak(cue);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      liveCueInFlightRef.current = false;
+    }
+  }
+
   function handleWsMessage(event) {
     let data;
     try {
@@ -291,7 +329,8 @@ export default function App() {
     setPoseDetected(Boolean(data.pose_detected));
     paintOverlay(data.landmarks || [], issues);
 
-    if (isActivePhase(nextPhase) && !workoutStartedRef.current) {
+    // Trust backend set_started (only after real movement + visibility)
+    if (data.set_started && !workoutStartedRef.current) {
       workoutStartedRef.current = true;
       setCoachListening(true);
       setStatus("Coach is listening");
@@ -304,19 +343,17 @@ export default function App() {
 
     sessionIssuesRef.current = [...sessionIssuesRef.current, ...issues];
     setIssueCount(sessionIssuesRef.current.length);
-    const cue = issues[0]?.spoken_text || "";
-    if (workoutStartedRef.current) setLiveCue(cue);
 
-    if (!workoutStartedRef.current || !isActivePhase(phaseRef.current)) return;
+    if (!data.set_started || !workoutStartedRef.current || !isActivePhase(phaseRef.current)) {
+      return;
+    }
 
     const now = Date.now();
     if (now - lastSpeakAtRef.current < SPEAK_DEBOUNCE_MS) return;
-
-    const spoken = issues.map((i) => i.spoken_text).filter(Boolean).join(". ");
-    if (!spoken) return;
-
     lastSpeakAtRef.current = now;
-    speak(spoken);
+
+    // Math rules detect the issue; LLM invents a fresh spoken cue
+    requestLiveCue(issues[0], nextPhase, latestRepsRef.current);
   }
 
   function startSet() {
@@ -335,6 +372,8 @@ export default function App() {
     setLiveCue("");
     setIssueCount(0);
     lastSpeakAtRef.current = 0;
+    recentCuesRef.current = [];
+    liveCueInFlightRef.current = false;
     clearOverlay();
 
     const url = `${getWsBase()}/ws/motion_tracker/${exercise}`;
@@ -343,7 +382,7 @@ export default function App() {
 
     ws.onopen = () => {
       setIsActive(true);
-      setStatus("Quiet until you start moving");
+      setStatus("Quiet until Gym Nerd sees a real rep start");
       intervalRef.current = setInterval(sendFrame, FRAME_INTERVAL_MS);
       timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
     };
@@ -377,7 +416,7 @@ export default function App() {
     const issueText =
       issueLog.length === 0
         ? "No form issues detected."
-        : issueLog.map((i) => i.spoken_text || i.type).join("; ");
+        : issueLog.map((i) => i.detail || i.type).join("; ");
 
     const userMessage = {
       role: "user",
@@ -432,11 +471,11 @@ export default function App() {
       <div className="webapp">
         <section className="start-page">
           <div className="start-copy">
-            <p className="brand">FormForge</p>
+            <p className="brand">{APP_NAME}</p>
             <p className="tagline">Your personal AI trainer</p>
             <h1>Train live. Fix form instantly.</h1>
             <p className="lede">
-              Point your webcam at your set. MediaPipe tracks your body. The coach stays quiet until you move, then talks you through corrections.
+              Point your webcam at your set. MediaPipe tracks your body. Gym Nerd stays quiet until you really start the lift, then invents fresh live cues on the fly.
             </p>
             <div className="start-actions">
               <button type="button" className="btn ghost" onClick={() => { setPage("app"); setTab("summary"); }}>
@@ -469,7 +508,7 @@ export default function App() {
     <div className="webapp">
       <header className="topbar">
         <button type="button" className="brand-btn" onClick={() => setPage("start")}>
-          FormForge
+          {APP_NAME}
         </button>
         <nav className="top-nav">
           <button type="button" className={tab === "summary" ? "active" : ""} onClick={() => setTab("summary")}>

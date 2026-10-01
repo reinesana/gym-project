@@ -26,7 +26,11 @@ async def handle_motion_tracker(websocket: WebSocket, exercise_type: str):
 
     await websocket.accept()
     state = {}
-    pose = mp.solutions.pose.Pose(model_complexity=1)
+    pose = mp.solutions.pose.Pose(
+        model_complexity=1,
+        min_detection_confidence=0.7,
+        min_tracking_confidence=0.7,
+    )
 
     try:
         while True:
@@ -58,6 +62,7 @@ async def handle_motion_tracker(websocket: WebSocket, exercise_type: str):
                     "phase": state.get("phase"),
                     "issues": issues,
                     "pose_detected": True,
+                    "set_started": bool(state.get("set_started")),
                     "landmarks": landmarks,
                 }
             )

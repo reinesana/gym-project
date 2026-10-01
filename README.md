@@ -1,6 +1,6 @@
 # stormhacks-gym-project
 
-FormForge — a real-time, AI-powered personal trainer.
+Gym Nerd 3000 — a real-time, AI-powered personal trainer.
 
 ## Architecture
 
@@ -39,6 +39,7 @@ Open http://localhost:5173 — Vite proxies `/api` and `/ws` to the FastAPI serv
 | Method | Path | Purpose |
 |--------|------|---------|
 | WS | `/ws/motion_tracker/{exercise_type}` | Stream Base64 JPEG frames; receive reps + form issues |
+| POST | `/api/live-cue` | Issue detail → fresh mid-set coaching line |
 | POST | `/api/coach-summary` | `{ chat_history }` → GPT-4o-mini post-set summary |
 
 Supported `exercise_type` values: `squat`, `lat_pulldown`.
