@@ -6,6 +6,10 @@ FormForge — a real-time, AI-powered personal trainer.
 
 - **Frontend:** React (Vite) — webcam capture, WebSocket frame streaming, browser TTS, workout history
 - **Backend:** FastAPI + MediaPipe Pose — functional math heuristics for live form cues; OpenAI only after the set ends
+  - `app.py` — thin routes only (no classes)
+  - `formcheck.py` — MediaPipe + WebSocket loop
+  - `poses/` — squat / lat pulldown heuristics
+  - `ai/coach.py` — post-set OpenAI summary
 
 ## Quick start
 
