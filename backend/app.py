@@ -1,4 +1,4 @@
-"""FastAPI entrypoint — routes only. Logic lives in formcheck / ai modules."""
+"""FastAPI entrypoint — routes only. Logic lives in motion_tracker / ai modules."""
 
 from __future__ import annotations
 
@@ -9,10 +9,10 @@ from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 from ai.coach import generate_coach_summary
-from formcheck import handle_formcheck
+from motion_tracker import handle_motion_tracker
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("formcheck")
+logger = logging.getLogger("motion_tracker")
 
 app = FastAPI(title="AI Fitness Form Coach")
 
@@ -46,9 +46,9 @@ def coach_summary(body: dict):
     return {"summary": summary}
 
 
-@app.websocket("/ws/formcheck/{exercise_type}")
-async def formcheck_ws(websocket: WebSocket, exercise_type: str):
-    await handle_formcheck(websocket, exercise_type)
+@app.websocket("/ws/motion_tracker/{exercise_type}")
+async def motion_tracker_ws(websocket: WebSocket, exercise_type: str):
+    await handle_motion_tracker(websocket, exercise_type)
 
 
 if __name__ == "__main__":
