@@ -83,7 +83,8 @@ Rules:
 In terminal 1:
 
 ```bash
-cd stormhacks-gym-project/backend
+cd gym-project/backend
+# or: cd stormhacks-gym-project/backend
 
 # create a virtual environment (first time only)
 python3 -m venv .venv
@@ -127,7 +128,8 @@ Then run `uvicorn` again.
 In terminal 2 (new window):
 
 ```bash
-cd stormhacks-gym-project/frontend
+cd frontend
+# from repo root: cd gym-project/frontend
 
 # install packages (first time only)
 npm install
@@ -201,7 +203,7 @@ If End Set / live cues fail with a key error:
 ## Project structure (simple view)
 
 ```text
-stormhacks-gym-project/
+gym-project/
 ├── backend/
 │   ├── .env                 # your secret API key (you create this)
 │   ├── .env.example         # template
