@@ -11,16 +11,16 @@ from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 from ai.coach import generate_coach_summary
+from ai.live_cue import generate_live_cue
 from motion_tracker import handle_motion_tracker
 
-# Load backend/.env (and repo-root .env if present)
 load_dotenv(Path(__file__).resolve().parent / ".env")
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("motion_tracker")
+logger = logging.getLogger("gym_nerd")
 
-app = FastAPI(title="AI Fitness Form Coach")
+app = FastAPI(title="Gym Nerd 3000")
 
 app.add_middleware(
     CORSMiddleware,
@@ -33,7 +33,20 @@ app.add_middleware(
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "app": "Gym Nerd 3000"}
+
+
+@app.post("/api/live-cue")
+def live_cue(body: dict):
+    """Generate one fresh mid-set coaching line (debounced by the client)."""
+    if not os.getenv("OPENAI_API_KEY"):
+        raise HTTPException(status_code=503, detail="OPENAI_API_KEY is not configured")
+    try:
+        cue = generate_live_cue(body)
+    except Exception as exc:
+        logger.exception("live cue failed")
+        raise HTTPException(status_code=502, detail=f"OpenAI request failed: {exc}") from exc
+    return {"cue": cue}
 
 
 @app.post("/api/coach-summary")

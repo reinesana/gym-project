@@ -6,7 +6,8 @@ const EXERCISES = [
   { value: "lat_pulldown", label: "Lat Pulldown", tip: "Film from the front" },
 ];
 
-const SPEAK_DEBOUNCE_MS = 4000;
+const SPEAK_DEBOUNCE_MS = 5000;
+const APP_NAME = "Gym Nerd 3000";
 const FRAME_INTERVAL_MS = 150;
 const TARGET_REPS = 10;
 
@@ -59,7 +60,7 @@ function todayLabel() {
     weekday: "long",
     month: "short",
     day: "numeric",
-  }).toUpperCase();
+  });
 }
 
 function isActivePhase(phase) {
@@ -134,8 +135,12 @@ export default function App() {
   const latestRepsRef = useRef(0);
   const workoutStartedRef = useRef(false);
   const phaseRef = useRef("—");
-  const latestIssuesRef = useRef([]);
+  const streamRef = useRef(null);
+  const recentCuesRef = useRef([]);
+  const liveCueInFlightRef = useRef(false);
+  const exerciseRef = useRef(exercise);
 
+  const [page, setPage] = useState("start"); // start | app
   const [tab, setTab] = useState("summary");
   const [exercise, setExercise] = useState("squat");
   const [isActive, setIsActive] = useState(false);
@@ -150,6 +155,7 @@ export default function App() {
   const [elapsed, setElapsed] = useState(0);
   const [liveCue, setLiveCue] = useState("");
   const [issueCount, setIssueCount] = useState(0);
+  const [cameraReady, setCameraReady] = useState(false);
 
   const totalReps = workoutLog.reduce((sum, w) => sum + (w.reps || 0), 0);
   const totalSets = workoutLog.length;
@@ -158,30 +164,50 @@ export default function App() {
   const formMeter = Math.max(12, 100 - issueCount * 8);
 
   useEffect(() => {
-    let stream;
-    async function startCamera() {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false,
-        });
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-        }
-      } catch (err) {
-        console.error(err);
-        setStatus("Camera permission needed");
-      }
-    }
-    startCamera();
+    exerciseRef.current = exercise;
+  }, [exercise]);
+
+  useEffect(() => {
     return () => {
-      stream?.getTracks().forEach((t) => t.stop());
       stopStreaming();
+      streamRef.current?.getTracks().forEach((t) => t.stop());
       if (timerRef.current) clearInterval(timerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (page !== "app") return;
+    let cancelled = false;
+
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+        setCameraReady(true);
+      } catch (err) {
+        console.error(err);
+        setStatus("Camera permission needed");
+        setCameraReady(false);
+      }
+    }
+
+    startCamera();
+    return () => {
+      cancelled = true;
+    };
+  }, [page]);
 
   function stopStreaming() {
     if (intervalRef.current) {
@@ -250,6 +276,36 @@ export default function App() {
     );
   }
 
+  async function requestLiveCue(issue, phaseName, repsNow) {
+    if (liveCueInFlightRef.current) return;
+    liveCueInFlightRef.current = true;
+    try {
+      const res = await fetch("/api/live-cue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          exercise: exerciseLabel(exerciseRef.current),
+          issue_type: issue.type,
+          detail: issue.detail || issue.type,
+          phase: phaseName,
+          reps: repsNow,
+          recent_cues: recentCuesRef.current.slice(-6),
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = await res.json();
+      const cue = (body.cue || "").trim();
+      if (!cue) return;
+      recentCuesRef.current = [...recentCuesRef.current, cue].slice(-8);
+      setLiveCue(cue);
+      speak(cue);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      liveCueInFlightRef.current = false;
+    }
+  }
+
   function handleWsMessage(event) {
     let data;
     try {
@@ -270,11 +326,11 @@ export default function App() {
     }
 
     const issues = Array.isArray(data.issues) ? data.issues : [];
-    latestIssuesRef.current = issues;
     setPoseDetected(Boolean(data.pose_detected));
     paintOverlay(data.landmarks || [], issues);
 
-    if (isActivePhase(nextPhase) && !workoutStartedRef.current) {
+    // Trust backend set_started (only after real movement + visibility)
+    if (data.set_started && !workoutStartedRef.current) {
       workoutStartedRef.current = true;
       setCoachListening(true);
       setStatus("Coach is listening");
@@ -287,19 +343,17 @@ export default function App() {
 
     sessionIssuesRef.current = [...sessionIssuesRef.current, ...issues];
     setIssueCount(sessionIssuesRef.current.length);
-    const cue = issues[0]?.spoken_text || "";
-    if (workoutStartedRef.current) setLiveCue(cue);
 
-    if (!workoutStartedRef.current || !isActivePhase(phaseRef.current)) return;
+    if (!data.set_started || !workoutStartedRef.current || !isActivePhase(phaseRef.current)) {
+      return;
+    }
 
     const now = Date.now();
     if (now - lastSpeakAtRef.current < SPEAK_DEBOUNCE_MS) return;
-
-    const spoken = issues.map((i) => i.spoken_text).filter(Boolean).join(". ");
-    if (!spoken) return;
-
     lastSpeakAtRef.current = now;
-    speak(spoken);
+
+    // Math rules detect the issue; LLM invents a fresh spoken cue
+    requestLiveCue(issues[0], nextPhase, latestRepsRef.current);
   }
 
   function startSet() {
@@ -307,7 +361,6 @@ export default function App() {
     setTab("workout");
     stopStreaming();
     sessionIssuesRef.current = [];
-    latestIssuesRef.current = [];
     latestRepsRef.current = 0;
     workoutStartedRef.current = false;
     phaseRef.current = "—";
@@ -319,6 +372,8 @@ export default function App() {
     setLiveCue("");
     setIssueCount(0);
     lastSpeakAtRef.current = 0;
+    recentCuesRef.current = [];
+    liveCueInFlightRef.current = false;
     clearOverlay();
 
     const url = `${getWsBase()}/ws/motion_tracker/${exercise}`;
@@ -327,7 +382,7 @@ export default function App() {
 
     ws.onopen = () => {
       setIsActive(true);
-      setStatus("Quiet until you start moving");
+      setStatus("Quiet until Gym Nerd sees a real rep start");
       intervalRef.current = setInterval(sendFrame, FRAME_INTERVAL_MS);
       timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
     };
@@ -361,7 +416,7 @@ export default function App() {
     const issueText =
       issueLog.length === 0
         ? "No form issues detected."
-        : issueLog.map((i) => i.spoken_text || i.type).join("; ");
+        : issueLog.map((i) => i.detail || i.type).join("; ");
 
     const userMessage = {
       role: "user",
@@ -411,165 +466,205 @@ export default function App() {
     }
   }
 
+  if (page === "start") {
+    return (
+      <div className="webapp">
+        <section className="start-page">
+          <div className="start-copy">
+            <p className="brand">{APP_NAME}</p>
+            <p className="tagline">Your personal AI trainer</p>
+            <h1>Train live. Fix form instantly.</h1>
+            <p className="lede">
+              Point your webcam at your set. MediaPipe tracks your body. Gym Nerd stays quiet until you really start the lift, then invents fresh live cues on the fly.
+            </p>
+            <div className="start-actions">
+              <button type="button" className="btn ghost" onClick={() => { setPage("app"); setTab("summary"); }}>
+                View summary
+              </button>
+              <button type="button" className="btn primary" onClick={() => { setPage("app"); setTab("workout"); }}>
+                Get started
+              </button>
+            </div>
+          </div>
+
+          <div className="start-panel">
+            <article className="glass-card">
+              <p className="eyebrow">Session preview</p>
+              <h2>Live form coaching</h2>
+              <ul>
+                <li>Squat + lat pulldown tracking</li>
+                <li>Pose skeleton on camera</li>
+                <li>Voice cues only mid-set</li>
+                <li>AI summary when you finish</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
-    <div className="app-shell">
-      <div className="phone">
-        <section className={`screen summary-screen ${tab === "summary" ? "visible" : "hidden"}`}>
-          <header className="summary-header">
+    <div className="webapp">
+      <header className="topbar">
+        <button type="button" className="brand-btn" onClick={() => setPage("start")}>
+          {APP_NAME}
+        </button>
+        <nav className="top-nav">
+          <button type="button" className={tab === "summary" ? "active" : ""} onClick={() => setTab("summary")}>
+            Summary
+          </button>
+          <button type="button" className={tab === "workout" ? "active" : ""} onClick={() => setTab("workout")}>
+            Workout
+          </button>
+        </nav>
+        <div className="top-meta">
+          <span>{todayLabel()}</span>
+          <span className={`pill ${coachListening ? "live" : "quiet"}`}>
+            {isActive ? (coachListening ? "Coaching" : "Quiet") : "Idle"}
+          </span>
+        </div>
+      </header>
+
+      <main className={`main ${tab === "workout" ? "main-live" : ""}`}>
+        <section className={`panel summary-panel ${tab === "summary" ? "visible" : "hidden"}`}>
+          <div className="panel-head">
             <div>
-              <p className="date">{todayLabel()}</p>
+              <p className="eyebrow">Today</p>
               <h1>Summary</h1>
             </div>
-            <div className="avatar" aria-hidden="true">FF</div>
-          </header>
-
-          <div className="section-head">
-            <h2>Activity</h2>
-          </div>
-          <article className="card activity-card">
-            <div className="activity-stats">
-              <p><span className="label move">Reps</span> <strong className="move">{totalReps}</strong><span className="muted">/30</span></p>
-              <p><span className="label">Sets</span> <strong>{totalSets}</strong></p>
-              <p><span className="label">Exercise</span> <strong>{exerciseLabel(exercise)}</strong></p>
-            </div>
-            <div
-              className="ring"
-              style={{ background: `conic-gradient(#2f6bff ${ringPct}%, #1a2338 0)` }}
-              aria-label={`${totalReps} of 30 reps`}
-            >
-              <div className="ring-hole">
-                <span>{totalReps}</span>
-                <small>reps</small>
-              </div>
-            </div>
-          </article>
-
-          <div className="section-head">
-            <h2>Workouts</h2>
-            <button type="button" className="linkish" onClick={() => setTab("workout")}>
-              Start
+            <button type="button" className="btn primary" onClick={() => setTab("workout")}>
+              Start workout
             </button>
           </div>
 
+          <div className="summary-grid">
+            <article className="tile activity-tile">
+              <div>
+                <p className="eyebrow">Activity</p>
+                <p className="stat-line"><strong>{totalReps}</strong> <span>/ 30 reps</span></p>
+                <p className="stat-sub">{totalSets} sets logged · {exerciseLabel(exercise)}</p>
+              </div>
+              <div
+                className="ring"
+                style={{ background: `conic-gradient(#2f6bff ${ringPct}%, #1a2338 0)` }}
+              >
+                <div className="ring-hole">
+                  <span>{totalReps}</span>
+                  <small>reps</small>
+                </div>
+              </div>
+            </article>
+
+            <article className="tile tip-tile">
+              <p className="eyebrow">Camera setup</p>
+              <h3>{exerciseLabel(exercise)}</h3>
+              <p>{exerciseTip(exercise)}</p>
+              <p>Keep head-to-feet in frame. Coach stays quiet until you start the movement.</p>
+            </article>
+          </div>
+
+          <div className="panel-head tight">
+            <h2>Workouts</h2>
+          </div>
+
           {workoutLog.length === 0 ? (
-            <article className="card empty-card">
-              <p>No sets yet. Open Workout for a full-screen camera coach.</p>
+            <article className="tile empty-tile">
+              <p>No sets yet. Open Workout, press Start, and finish a set to build history here.</p>
             </article>
           ) : (
-            <div className="workout-list">
+            <div className="history-grid">
               {[...workoutLog].reverse().map((entry, index) => (
-                <article className="card workout-row" key={`${entry.exercise}-${index}`}>
-                  <div className="workout-icon" aria-hidden="true">F</div>
-                  <div className="workout-copy">
+                <article className="tile history-tile" key={`${entry.exercise}-${index}`}>
+                  <div>
                     <strong>{exerciseLabel(entry.exercise)}</strong>
                     <p>{entry.aiFeedback}</p>
                   </div>
-                  <div className="workout-meta">
-                    <span className="duration">{entry.reps} reps</span>
-                    <span className="when">{entry.at}</span>
+                  <div className="history-meta">
+                    <span>{entry.reps} reps</span>
+                    <span>{entry.at}</span>
                   </div>
                 </article>
               ))}
             </div>
           )}
-
-          <div className="section-head">
-            <h2>Camera tip</h2>
-          </div>
-          <article className="card tip-card">
-            <p><strong>Squat:</strong> 45° front-side so we can see knee cave and depth.</p>
-            <p><strong>Lat pulldown:</strong> straight-on front view for both arms.</p>
-            <p>Keep your full body in frame from head to feet.</p>
-          </article>
         </section>
 
-        <section className={`screen workout-screen live-stage ${tab === "workout" ? "visible" : "hidden"}`}>
-          <div className="live-camera">
-            <video ref={videoRef} className="camera" playsInline muted autoPlay />
-            <canvas ref={overlayRef} className="overlay-canvas" />
-            <canvas ref={captureRef} className="hidden-canvas" aria-hidden="true" />
+        <section className={`panel live-panel ${tab === "workout" ? "visible" : "hidden"}`}>
+          <div className="live-layout">
+            <div className="live-camera">
+              <video ref={videoRef} className="camera" playsInline muted autoPlay />
+              <canvas ref={overlayRef} className="overlay-canvas" />
+              <canvas ref={captureRef} className="hidden-canvas" aria-hidden="true" />
 
-            <div className="live-top">
-              <button type="button" className="glass-btn" onClick={() => !isActive && setTab("summary")}>
-                Back
-              </button>
-              <span className={`pill ${coachListening ? "live" : "quiet"}`}>
-                {coachListening ? "Coaching" : "Quiet"}
-              </span>
-            </div>
-
-            <div className="guide-card">
-              <strong>{exerciseLabel(exercise)}</strong>
-              <p>{exerciseTip(exercise)}</p>
-            </div>
-
-            {liveCue ? <div className="cue-banner">{liveCue}</div> : null}
-
-            <div className="live-bottom">
-              <div className="rep-timer">
-                <div
-                  className="rep-ring"
-                  style={{ background: `conic-gradient(#fff ${setProgress}%, rgba(255,255,255,0.2) 0)` }}
-                >
-                  <div className="rep-hole">
-                    <span>{elapsed}s</span>
-                  </div>
+              <div className="live-top">
+                <div className="guide-card">
+                  <strong>{exerciseLabel(exercise)}</strong>
+                  <p>{exerciseTip(exercise)}</p>
                 </div>
-                <p className="exercise-name">{exerciseLabel(exercise)}</p>
-                <p className="rep-sub">{reps} reps · {poseDetected ? phase : "finding you"}</p>
+                <span className={`pill ${coachListening ? "live" : "quiet"}`}>
+                  {coachListening ? "Coaching" : "Quiet"}
+                </span>
               </div>
 
-              <div className="form-meter" aria-label="Form meter">
-                <div className="form-fill" style={{ height: `${Math.min(100, formMeter)}%` }} />
+              {liveCue ? <div className="cue-banner">{liveCue}</div> : null}
+
+              <div className="live-bottom">
+                <div className="rep-timer">
+                  <div
+                    className="rep-ring"
+                    style={{ background: `conic-gradient(#fff ${setProgress}%, rgba(255,255,255,0.2) 0)` }}
+                  >
+                    <div className="rep-hole">
+                      <span>{elapsed}s</span>
+                    </div>
+                  </div>
+                  <p className="exercise-name">{exerciseLabel(exercise)}</p>
+                  <p className="rep-sub">
+                    {reps} reps · {poseDetected ? phase : cameraReady ? "finding you" : "camera off"}
+                  </p>
+                </div>
+                <div className="form-meter" aria-label="Form meter">
+                  <div className="form-fill" style={{ height: `${Math.min(100, formMeter)}%` }} />
+                </div>
+              </div>
+
+              <div className="session-progress">
+                <div style={{ width: `${setProgress}%` }} />
               </div>
             </div>
 
-            <div className="session-progress">
-              <div style={{ width: `${setProgress}%` }} />
-            </div>
+            <aside className="live-sidebar">
+              <p className="eyebrow">Controls</p>
+              <h2>Live set</h2>
+              <label className="field">
+                <span>Exercise</span>
+                <select
+                  value={exercise}
+                  disabled={isActive}
+                  onChange={(e) => setExercise(e.target.value)}
+                >
+                  {EXERCISES.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="sidebar-tip">{exerciseTip(exercise)}</p>
+              <div className="sidebar-actions">
+                <button type="button" className="btn primary" onClick={startSet} disabled={isActive || ending}>
+                  Start set
+                </button>
+                <button type="button" className="btn ghost" onClick={endSet} disabled={!isActive || ending}>
+                  {ending ? "Summarizing…" : "End set"}
+                </button>
+              </div>
+              <p className="sidebar-status">{status}</p>
+            </aside>
           </div>
-
-          <div className="live-controls">
-            <select
-              value={exercise}
-              disabled={isActive}
-              onChange={(e) => setExercise(e.target.value)}
-            >
-              {EXERCISES.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            <button type="button" className="btn primary" onClick={startSet} disabled={isActive || ending}>
-              Start
-            </button>
-            <button type="button" className="btn ghost" onClick={endSet} disabled={!isActive || ending}>
-              {ending ? "…" : "End"}
-            </button>
-          </div>
-          <p className="live-status">{status}</p>
         </section>
-
-        <nav className={`tabbar ${tab === "workout" ? "over-live" : ""}`} aria-label="Primary">
-          <button
-            type="button"
-            className={tab === "summary" ? "active" : ""}
-            onClick={() => setTab("summary")}
-          >
-            <span className="tab-icon ringlet" />
-            Summary
-          </button>
-          <button
-            type="button"
-            className={tab === "workout" ? "active" : ""}
-            onClick={() => setTab("workout")}
-          >
-            <span className="tab-icon person" />
-            Workout
-          </button>
-        </nav>
-      </div>
+      </main>
     </div>
   );
 }
