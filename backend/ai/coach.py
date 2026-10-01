@@ -8,7 +8,7 @@ from typing import Any
 from openai import OpenAI
 
 
-SYSTEM_PROMPT = (
+system_prompt = (
     "You are an energetic, supportive personal fitness coach. "
     "Given the user's completed set (reps and any form issues), write a short "
     "post-set voice summary: 2–4 sentences, encouraging, specific, and actionable. "
@@ -23,7 +23,7 @@ def generate_coach_summary(chat_history: list[dict[str, Any]]) -> str:
     """
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-    messages: list[dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
     for message in chat_history:
         role = str(message.get("role", "user"))
         content = str(message.get("content", ""))

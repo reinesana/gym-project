@@ -7,20 +7,20 @@ from typing import Any
 
 
 # MediaPipe landmark indices
-LEFT_SHOULDER, RIGHT_SHOULDER = 11, 12
-LEFT_ELBOW, RIGHT_ELBOW = 13, 14
-LEFT_WRIST, RIGHT_WRIST = 15, 16
-LEFT_HIP, RIGHT_HIP = 23, 24
+left_shoulder_i, right_shoulder_i = 11, 12
+left_elbow_i, right_elbow_i = 13, 14
+left_wrist_i, right_wrist_i = 15, 16
+left_hip_i, right_hip_i = 23, 24
 
 
-def _lm(landmarks: list, index: int) -> tuple[float, float, float]:
+def lm(landmarks: list, index: int) -> tuple[float, float, float]:
     point = landmarks[index]
     if isinstance(point, dict):
         return float(point["x"]), float(point["y"]), float(point.get("visibility", 1.0))
     return float(point.x), float(point.y), float(getattr(point, "visibility", 1.0))
 
 
-def _angle(a: tuple[float, float, float], b: tuple[float, float, float], c: tuple[float, float, float]) -> float:
+def angle(a: tuple[float, float, float], b: tuple[float, float, float], c: tuple[float, float, float]) -> float:
     """Return the angle ABC in degrees."""
     bax, bay = a[0] - b[0], a[1] - b[1]
     bcx, bcy = c[0] - b[0], c[1] - b[1]
@@ -53,17 +53,17 @@ def analyze_lat_pulldown(
     cooldown = dict(state.get("issue_cooldown", {}))
     frame = int(state.get("frame", 0)) + 1
 
-    left_shoulder = _lm(landmarks, LEFT_SHOULDER)
-    right_shoulder = _lm(landmarks, RIGHT_SHOULDER)
-    left_elbow = _lm(landmarks, LEFT_ELBOW)
-    right_elbow = _lm(landmarks, RIGHT_ELBOW)
-    left_wrist = _lm(landmarks, LEFT_WRIST)
-    right_wrist = _lm(landmarks, RIGHT_WRIST)
-    left_hip = _lm(landmarks, LEFT_HIP)
-    right_hip = _lm(landmarks, RIGHT_HIP)
+    left_shoulder = lm(landmarks, left_shoulder_i)
+    right_shoulder = lm(landmarks, right_shoulder_i)
+    left_elbow = lm(landmarks, left_elbow_i)
+    right_elbow = lm(landmarks, right_elbow_i)
+    left_wrist = lm(landmarks, left_wrist_i)
+    right_wrist = lm(landmarks, right_wrist_i)
+    left_hip = lm(landmarks, left_hip_i)
+    right_hip = lm(landmarks, right_hip_i)
 
-    left_elbow_angle = _angle(left_shoulder, left_elbow, left_wrist)
-    right_elbow_angle = _angle(right_shoulder, right_elbow, right_wrist)
+    left_elbow_angle = angle(left_shoulder, left_elbow, left_wrist)
+    right_elbow_angle = angle(right_shoulder, right_elbow, right_wrist)
     elbow_angle = (left_elbow_angle + right_elbow_angle) / 2.0
 
     # Shoulder abduction-ish: wrist height relative to shoulder (y grows downward)
@@ -73,7 +73,7 @@ def analyze_lat_pulldown(
 
     issues: list[dict[str, str]] = []
 
-    def _emit(issue_type: str, spoken_text: str, every_n_frames: int = 30) -> None:
+    def emit(issue_type: str, spoken_text: str, every_n_frames: int = 30) -> None:
         last = cooldown.get(issue_type, -10_000)
         if frame - last >= every_n_frames:
             issues.append({"type": issue_type, "spoken_text": spoken_text})
@@ -93,24 +93,24 @@ def analyze_lat_pulldown(
     if phase in {"pulling", "bottom", "returning"}:
         # Uneven pull between sides
         if abs(left_elbow_angle - right_elbow_angle) > 25:
-            _emit("asymmetry", "Pull evenly with both arms")
+            emit("asymmetry", "Pull evenly with both arms")
 
         # Elbows flaring too far from torso in image x-space
         shoulder_width = abs(left_shoulder[0] - right_shoulder[0]) or 0.2
         left_flare = abs(left_elbow[0] - left_shoulder[0])
         right_flare = abs(right_elbow[0] - right_shoulder[0])
         if left_flare > shoulder_width * 0.85 or right_flare > shoulder_width * 0.85:
-            _emit("elbow_flare", "Keep your elbows closer to your sides")
+            emit("elbow_flare", "Keep your elbows closer to your sides")
 
         # Incomplete range — wrists never drop near chest/shoulder line
         if phase == "bottom" and pull_depth < 0.05:
-            _emit("shallow_pull", "Pull the bar down to your chest")
+            emit("shallow_pull", "Pull the bar down to your chest")
 
         # Leaning too far back: shoulders drifting behind hips
         mid_shoulder_x = (left_shoulder[0] + right_shoulder[0]) / 2.0
         mid_hip_x = (left_hip[0] + right_hip[0]) / 2.0
         if abs(mid_shoulder_x - mid_hip_x) > 0.12:
-            _emit("lean_back", "Stay upright, don't lean back")
+            emit("lean_back", "Stay upright, don't lean back")
 
     new_state = {
         "phase": phase,

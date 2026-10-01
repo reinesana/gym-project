@@ -12,14 +12,14 @@ from fastapi import WebSocket, WebSocketDisconnect
 from poses.lat_pulldown import analyze_lat_pulldown
 from poses.squat import analyze_squat
 
-EXERCISES = {
+exercises = {
     "squat": analyze_squat,
     "lat_pulldown": analyze_lat_pulldown,
 }
 
 
 async def handle_motion_tracker(websocket: WebSocket, exercise_type: str):
-    analyze = EXERCISES.get(exercise_type)
+    analyze = exercises.get(exercise_type)
     if analyze is None:
         await websocket.close(code=1008)
         return
