@@ -1,12 +1,12 @@
 :root {
   --bg: #000000;
-  --card: #1c1c1e;
-  --card-2: #2c2c2e;
+  --card: #141417;
+  --card-2: #222228;
   --ink: #ffffff;
   --muted: #8e8e93;
+  --blue: #2f6bff;
   --green: #b2ff59;
   --pink: #ff4d6d;
-  --pink-dim: #3a151c;
   --font: "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
@@ -19,7 +19,7 @@ body,
 #root {
   margin: 0;
   min-height: 100%;
-  background: #0a0a0a;
+  background: #050505;
   color: var(--ink);
   font-family: var(--font);
 }
@@ -39,7 +39,7 @@ button {
   place-items: center;
   padding: 1rem;
   background:
-    radial-gradient(800px 400px at 50% 0%, #1a1a1a, transparent 60%),
+    radial-gradient(900px 420px at 50% 0%, #17233f, transparent 55%),
     #050505;
 }
 
@@ -71,8 +71,14 @@ button {
   display: block;
 }
 
-.summary-header,
-.workout-header {
+.screen.live-stage.visible {
+  display: flex;
+  flex-direction: column;
+  padding: 0 0 4.8rem;
+  overflow: hidden;
+}
+
+.summary-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -88,8 +94,7 @@ button {
   font-weight: 600;
 }
 
-.summary-header h1,
-.workout-header h1 {
+.summary-header h1 {
   margin: 0.15rem 0 0;
   font-size: 2.1rem;
   letter-spacing: -0.03em;
@@ -101,8 +106,8 @@ button {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: linear-gradient(145deg, #ff6b81, #7cff6b);
-  color: #111;
+  background: linear-gradient(145deg, #2f6bff, #7aa2ff);
+  color: #fff;
   font-weight: 800;
   font-size: 0.85rem;
 }
@@ -119,11 +124,10 @@ button {
   font-size: 1.35rem;
 }
 
-.linkish,
-.back {
+.linkish {
   border: 0;
   background: transparent;
-  color: var(--green);
+  color: var(--blue);
   font-weight: 600;
   padding: 0;
 }
@@ -161,7 +165,7 @@ button {
 
 .activity-stats .label.move,
 .activity-stats .move {
-  color: var(--pink);
+  color: var(--blue);
 }
 
 .activity-stats strong {
@@ -264,7 +268,7 @@ button {
 }
 
 .duration {
-  color: var(--green);
+  color: var(--blue);
   font-size: 1.35rem;
   font-weight: 700;
 }
@@ -274,21 +278,23 @@ button {
   font-size: 0.8rem;
 }
 
-.camera-wrap {
+/* Full-bleed live workout */
+.live-camera {
   position: relative;
-  border-radius: 18px;
+  flex: 1;
+  min-height: 520px;
+  background: #0a0a0a;
   overflow: hidden;
-  background: #111;
-  min-height: 360px;
 }
 
 .camera {
   display: block;
   width: 100%;
-  height: 360px;
+  height: 100%;
+  min-height: 520px;
   object-fit: cover;
   transform: scaleX(-1);
-  background: #111;
+  background: #0a0a0a;
 }
 
 .overlay-canvas {
@@ -303,63 +309,187 @@ button {
   display: none;
 }
 
-.hud {
+.live-top {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  top: 0.85rem;
+  left: 0.85rem;
+  right: 0.85rem;
   display: flex;
   justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.75rem 0.85rem;
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.85));
-  font-size: 0.8rem;
+  align-items: center;
+  z-index: 2;
+}
+
+.glass-btn {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.45rem 0.85rem;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  backdrop-filter: blur(8px);
+  font-weight: 600;
+}
+
+.guide-card {
+  position: absolute;
+  top: 3.4rem;
+  left: 0.85rem;
+  width: 132px;
+  border-radius: 14px;
+  padding: 0.7rem 0.75rem;
+  background: rgba(255, 255, 255, 0.92);
+  color: #111;
+  z-index: 2;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.guide-card strong {
+  display: block;
+  font-size: 0.92rem;
+  margin-bottom: 0.25rem;
+}
+
+.guide-card p {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  color: #444;
+}
+
+.cue-banner {
+  position: absolute;
+  top: 42%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  padding: 0.55rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(255, 59, 48, 0.88);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.92rem;
+  white-space: nowrap;
+  max-width: 90%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.live-bottom {
+  position: absolute;
+  left: 0.9rem;
+  right: 0.9rem;
+  bottom: 1.35rem;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  z-index: 2;
+}
+
+.rep-timer {
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+}
+
+.rep-ring {
+  width: 86px;
+  height: 86px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  margin-bottom: 0.45rem;
+}
+
+.rep-hole {
+  width: 66px;
+  height: 66px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  display: grid;
+  place-items: center;
+  backdrop-filter: blur(6px);
+}
+
+.rep-hole span {
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.exercise-name {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.rep-sub {
+  margin: 0.15rem 0 0;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.82);
   text-transform: capitalize;
 }
 
-.controls {
-  margin-top: 0.85rem;
+.form-meter {
+  width: 18px;
+  height: 120px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  backdrop-filter: blur(4px);
+}
+
+.form-fill {
+  width: 100%;
+  background: linear-gradient(180deg, #ff9f0a, #ff6b00);
+  border-radius: 999px;
+}
+
+.session-progress {
+  position: absolute;
+  left: 0.9rem;
+  right: 0.9rem;
+  bottom: 0.55rem;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  overflow: hidden;
+  z-index: 2;
+}
+
+.session-progress > div {
+  height: 100%;
+  background: #fff;
+}
+
+.live-controls {
   display: grid;
-  gap: 0.75rem;
+  grid-template-columns: 1.3fr 1fr 1fr;
+  gap: 0.45rem;
+  padding: 0.65rem 0.75rem 0.15rem;
+  background: #000;
 }
 
-.field {
-  display: grid;
-  gap: 0.35rem;
-}
-
-.field span {
-  color: var(--muted);
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.field select {
+.live-controls select {
   appearance: none;
-  background: var(--card-2);
-  color: var(--ink);
   border: 0;
   border-radius: 12px;
-  padding: 0.8rem 0.9rem;
+  background: var(--card-2);
+  color: #fff;
+  padding: 0.7rem 0.65rem;
 }
 
-.tip-line {
+.live-status {
   margin: 0;
+  padding: 0 0.85rem 0.35rem;
   color: var(--muted);
-  font-size: 0.88rem;
-}
-
-.actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.6rem;
+  font-size: 0.78rem;
+  background: #000;
 }
 
 .btn {
   border: 0;
-  border-radius: 14px;
-  padding: 0.85rem 0.75rem;
+  border-radius: 12px;
+  padding: 0.7rem 0.5rem;
   font-weight: 700;
 }
 
@@ -369,8 +499,8 @@ button {
 }
 
 .btn.primary {
-  background: var(--green);
-  color: #102000;
+  background: var(--blue);
+  color: #fff;
 }
 
 .btn.ghost {
@@ -383,16 +513,17 @@ button {
   font-weight: 700;
   border-radius: 999px;
   padding: 0.35rem 0.65rem;
+  backdrop-filter: blur(8px);
 }
 
 .pill.quiet {
-  background: #2c2c2e;
-  color: var(--muted);
+  background: rgba(44, 44, 46, 0.75);
+  color: #d0d0d0;
 }
 
 .pill.live {
-  background: rgba(178, 255, 89, 0.18);
-  color: var(--green);
+  background: rgba(47, 107, 255, 0.28);
+  color: #9cbcff;
 }
 
 .tabbar {
@@ -407,6 +538,11 @@ button {
   background: rgba(20, 20, 20, 0.92);
   backdrop-filter: blur(12px);
   border-top: 1px solid #222;
+  z-index: 5;
+}
+
+.tabbar.over-live {
+  background: rgba(0, 0, 0, 0.72);
 }
 
 .tabbar button {
@@ -421,7 +557,7 @@ button {
 }
 
 .tabbar button.active {
-  color: var(--green);
+  color: var(--blue);
 }
 
 .tab-icon {
