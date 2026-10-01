@@ -1,4 +1,4 @@
-"""WebSocket form-check loop (MediaPipe + exercise heuristics)."""
+"""WebSocket motion tracker loop (MediaPipe + exercise heuristics)."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ EXERCISES = {
 }
 
 
-async def handle_formcheck(websocket: WebSocket, exercise_type: str):
+async def handle_motion_tracker(websocket: WebSocket, exercise_type: str):
     analyze = EXERCISES.get(exercise_type)
     if analyze is None:
         await websocket.close(code=1008)

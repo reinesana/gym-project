@@ -157,7 +157,7 @@ export default function App() {
     setPhase("—");
     lastSpeakAtRef.current = 0;
 
-    const url = `${getWsBase()}/ws/formcheck/${exercise}`;
+    const url = `${getWsBase()}/ws/motion_tracker/${exercise}`;
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
