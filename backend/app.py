@@ -4,12 +4,18 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 from ai.coach import generate_coach_summary
 from motion_tracker import handle_motion_tracker
+
+# Load backend/.env (and repo-root .env if present)
+load_dotenv(Path(__file__).resolve().parent / ".env")
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("motion_tracker")
