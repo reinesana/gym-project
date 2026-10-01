@@ -6,12 +6,13 @@ from __future__ import annotations
 
 import base64
 import logging
+import os
 from typing import Any
 
 import cv2
 import mediapipe as mp
 import numpy as np
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -79,7 +80,13 @@ def health() -> dict[str, str]:
 @app.post("/api/coach-summary", response_model=CoachSummaryResponse)
 def coach_summary(body: CoachSummaryRequest) -> CoachSummaryResponse:
     """Generate a personalized post-set voice summary via OpenAI (once per set)."""
-    summary = generate_coach_summary(body.chat_history)
+    if not os.getenv("OPENAI_API_KEY"):
+        raise HTTPException(status_code=503, detail="OPENAI_API_KEY is not configured")
+    try:
+        summary = generate_coach_summary(body.chat_history)
+    except Exception as exc:
+        logger.exception("coach summary failed")
+        raise HTTPException(status_code=502, detail=f"OpenAI request failed: {exc}") from exc
     return CoachSummaryResponse(summary=summary)
 
 
