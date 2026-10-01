@@ -9,12 +9,16 @@ import mediapipe as mp
 import numpy as np
 from fastapi import WebSocket, WebSocketDisconnect
 
+from poses.bicep_curl import analyze_bicep_curl
 from poses.lat_pulldown import analyze_lat_pulldown
+from poses.shoulder_press import analyze_shoulder_press
 from poses.squat import analyze_squat
 
 exercises = {
     "squat": analyze_squat,
     "lat_pulldown": analyze_lat_pulldown,
+    "bicep_curl": analyze_bicep_curl,
+    "shoulder_press": analyze_shoulder_press,
 }
 
 

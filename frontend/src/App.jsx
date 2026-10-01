@@ -4,6 +4,8 @@ import "./App.css";
 const EXERCISES = [
   { value: "squat", label: "Squat", tip: "Film from a 45° front-side angle" },
   { value: "lat_pulldown", label: "Lat Pulldown", tip: "Film from the front" },
+  { value: "bicep_curl", label: "Bicep Curl", tip: "Film from the front or slight side" },
+  { value: "shoulder_press", label: "Shoulder Press", tip: "Film from the front, full arms in frame" },
 ];
 
 const SPEAK_DEBOUNCE_MS = 5000;
@@ -26,9 +28,22 @@ const ISSUE_EDGES = {
   elbow_flare: [[11, 13], [12, 14]],
   shallow_pull: [[11, 13], [13, 15], [12, 14], [14, 16]],
   lean_back: [[11, 23], [12, 24]],
+  elbow_swing: [[11, 13], [12, 14]],
+  shallow_curl: [[11, 13], [13, 15], [12, 14], [14, 16]],
+  soft_lockout: [[11, 13], [13, 15], [12, 14], [14, 16]],
+  wrist_flare: [[15, 11], [16, 12], [13, 15], [14, 16]],
 };
 
-const REST_PHASES = new Set(["standing", "arms_up", "—", "", null, undefined]);
+const REST_PHASES = new Set([
+  "standing",
+  "arms_up",
+  "arms_down",
+  "racked",
+  "—",
+  "",
+  null,
+  undefined,
+]);
 
 function getWsBase() {
   const proto = window.location.protocol === "https:" ? "wss" : "ws";
@@ -571,7 +586,10 @@ export default function App() {
               <p className="eyebrow">Camera setup</p>
               <h3>{exerciseLabel(exercise)}</h3>
               <p>{exerciseTip(exercise)}</p>
-              <p>Keep head-to-feet in frame. Coach stays quiet until you start the movement.</p>
+              <p>Keep the working joints in frame. Coach stays quiet until you start the movement.</p>
+              <p className="stat-sub" style={{ marginTop: "0.75rem" }}>
+                Available: Squat, Lat Pulldown, Bicep Curl, Shoulder Press
+              </p>
             </article>
           </div>
 

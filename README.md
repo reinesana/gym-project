@@ -43,4 +43,4 @@ Open http://localhost:5173 — Vite proxies `/api` and `/ws` to the FastAPI serv
 | POST | `/api/live-cue` | Issue detail → fresh mid-set coaching line |
 | POST | `/api/coach-summary` | `{ chat_history }` → GPT-4o-mini post-set summary |
 
-Supported `exercise_type` values: `squat`, `lat_pulldown`.
+Supported `exercise_type` values: `squat`, `lat_pulldown`, `bicep_curl`, `shoulder_press`.
